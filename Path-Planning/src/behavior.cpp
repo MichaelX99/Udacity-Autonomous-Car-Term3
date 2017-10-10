@@ -1,6 +1,7 @@
 #include "spline.h"
 #include "behavior.h"
 #include "helper.h"
+#include <iostream>
 
 Planner::Planner(Planner_Init input)
 {
@@ -10,8 +11,9 @@ Planner::Planner(Planner_Init input)
   _map_waypoints_dx = input.map_waypoints_dx;
   _map_waypoints_dy = input.map_waypoints_dy;
 
-  _lane = 1;
+  _lane = CENTER_LANE;
   _ref_vel = 0.0;
+  _too_close = false;
 }
 
 std::vector<double> Planner::get_x_vals()
@@ -24,8 +26,9 @@ std::vector<double> Planner::get_y_vals()
   return _next_y_vals;
 }
 
-void Planner::avoid_vehicles()
+void Planner::lane_keep()
 {
+
   int prev_size = _previous_path_x.size();
 
   if (prev_size > 0)
@@ -33,7 +36,7 @@ void Planner::avoid_vehicles()
     _car_s = _end_path_s;
   }
 
-  bool too_close = false;
+  _too_close = false;
 
   for (int i = 0; i < _sensor_fusion.size(); i++)
   {
@@ -47,35 +50,50 @@ void Planner::avoid_vehicles()
 
       check_car_s += ((double)(prev_size) * 0.02 * check_speed);
 
+      // if the car ahead is too close
       if ((check_car_s > _car_s) && ((check_car_s - _car_s) < 30))
       {
-        too_close = true;
+        _too_close = true;
         // SHOWS HOW TO CHANGE LANES
         ////////////////////////////////////////////////////////////////////////////////////////////////////
-        if (_lane > 0)
+        /*if (_lane > LEFT_LANE)
         {
-          _lane = 0;
-        }
+          _lane = LEFT_LANE;
+        }*/
       }
     }
   }
 
   // SHOWS HOW TO SLOW DOWN NOT STOP
   //////////////////////////////////////////////////////////////////////////////////////////////////////////
-  if (too_close)
+  /*if (_too_close)
   {
     _ref_vel -= .224;
   }
   else if (_ref_vel < SPEED_LIMIT)
   {
     _ref_vel += .224;
+  }*/
+  // Accelerate until we are at the speed limit if there is nothing preventing us
+  if (_ref_vel < SPEED_LIMIT && !_too_close)
+  {
+    _ref_vel += SPEED_CHANGE;
   }
 }
+
+int Planner::lane_prepare()
+{
+  return _lane;
+}
+
+void Planner::lane_switch(int lane_to_switch)
+{}
 
 void Planner::trajectory_generation()
 {
   int prev_size = _previous_path_x.size();
 
+  // Interpolated points to smooth path
   std::vector<double> ptsx;
   std::vector<double> ptsy;
 
@@ -83,6 +101,7 @@ void Planner::trajectory_generation()
   double ref_y = _car_y;
   double ref_yaw = deg2rad(_car_yaw);
 
+  // If we don't have enough points in our path then make some
   if (prev_size < 2)
   {
     double prev_car_x = _car_x - cos(_car_yaw);
@@ -110,6 +129,7 @@ void Planner::trajectory_generation()
     ptsy.push_back(ref_y);
   }
 
+  // Get the XY coordinated of our path in the future
   std::vector<double> next_wp0 = getXY(_car_s+30, (2+4*_lane), _map_waypoints_s, _map_waypoints_x, _map_waypoints_y);
   std::vector<double> next_wp1 = getXY(_car_s+60, (2+4*_lane), _map_waypoints_s, _map_waypoints_x, _map_waypoints_y);
   std::vector<double> next_wp2 = getXY(_car_s+90, (2+4*_lane), _map_waypoints_s, _map_waypoints_x, _map_waypoints_y);
@@ -122,6 +142,7 @@ void Planner::trajectory_generation()
   ptsy.push_back(next_wp1[1]);
   ptsy.push_back(next_wp2[1]);
 
+  // Transform our coordinate system to make it look like our vehicle is facing the direction of the point not from its current orientation
   for (int i = 0; i < ptsx.size(); i++)
   {
     double shift_x = ptsx[i] - ref_x;
@@ -131,15 +152,19 @@ void Planner::trajectory_generation()
     ptsy[i] = (shift_x * sin(0-ref_yaw) + shift_y * cos(0-ref_yaw));
   }
 
+  // Define the spline object
   tk::spline s;
 
+  // Fill the spline with the path that we  generated into the future
   s.set_points(ptsx, ptsy);
 
+  // If there are any points from the earlier iteration make sure that those also get executed
   for (int i = 0; i < prev_size; i++)
   {
     _next_x_vals.push_back(_previous_path_x[i]);
     _next_y_vals.push_back(_previous_path_y[i]);
   }
+
 
   double target_x = 30.0;
   double target_y = s(target_x);
@@ -147,7 +172,8 @@ void Planner::trajectory_generation()
 
   double x_add_on = 0;
 
-  for (int i = 1; i <= 50 - prev_size; i++)
+  // For all the points in our path that we still need to populate
+  for (int i = 1; i <= PATH_SIZE - prev_size; i++)
   {
     double N = target_dist / (0.02 * _ref_vel / 2.24);
     double x_point = x_add_on + target_x/N;
@@ -184,7 +210,28 @@ void Planner::plan(Sim_Input input)
   _end_path_d = input.end_path_d;
   _sensor_fusion = input.sensor_fusion;
 
-  avoid_vehicles();
+  // Keep our current lane and check if we need to leave the lane
+  lane_keep();
+
+  // Is there a vehicle blocking our way?
+  if (_too_close)
+  {
+    // Determine whether it makes sense to change lanes
+    int should_switch = lane_prepare();
+
+    // If the best lane is not the one we are currently in then change lanes
+    if (should_switch != _lane)
+    {
+      lane_switch(should_switch);
+    }
+    // If there is no good lane to change to then just slow down
+    else
+    {
+      std::cout << "Reducing Speed\n";
+      _ref_vel -= SPEED_CHANGE;
+    }
+  }
+
   trajectory_generation();
 }
 

@@ -3,7 +3,15 @@
 
 #include <vector>
 
+#define PATH_SIZE 50
+
+#define SPEED_CHANGE .224
+
 #define SPEED_LIMIT 49.5
+
+#define LEFT_LANE 0
+#define CENTER_LANE 1
+#define RIGHT_LANE 2
 
 struct Sim_Input
 {
@@ -45,6 +53,7 @@ public:
   void clear();
 
 private:
+  // Values to populate to output to the simulator
   std::vector<double> _next_x_vals;
   std::vector<double> _next_y_vals;
 
@@ -61,23 +70,26 @@ private:
   // reference velocity
   double _ref_vel;
 
+  bool _too_close;
+
+  // Inputs from the simulator at each time step
   double _car_x;
   double _car_y;
   double _car_s;
   double _car_d;
   double _car_yaw;
   double _car_speed;
-
   std::vector<double> _previous_path_x;
   std::vector<double> _previous_path_y;
-
   double _end_path_s;
   double _end_path_d;
-
   std::vector<std::vector<double> > _sensor_fusion;
 
 
-  void avoid_vehicles();
+  // Class functions
+  void lane_keep();
+  int lane_prepare();
+  void lane_switch(int lane_to_switch);
   void trajectory_generation();
 
 };
