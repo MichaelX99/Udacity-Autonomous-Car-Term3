@@ -26,17 +26,16 @@ std::vector<double> Planner::get_y_vals()
   return _next_y_vals;
 }
 
-void Planner::lane_keep()
+int Planner::lane_keep()
 {
 
-  int prev_size = _previous_path_x.size();
-
-  if (prev_size > 0)
+  if (_prev_size > 0)
   {
     _car_s = _end_path_s;
   }
 
   _too_close = false;
+  int car_ind = -1;
 
   for (int i = 0; i < _sensor_fusion.size(); i++)
   {
@@ -48,51 +47,100 @@ void Planner::lane_keep()
       double check_speed = sqrt(pow(vx,2) + pow(vy,2));
       double check_car_s = _sensor_fusion[i][5];
 
-      check_car_s += ((double)(prev_size) * 0.02 * check_speed);
+      check_car_s += ((double)(_prev_size) * 0.02 * check_speed);
 
       // if the car ahead is too close
       if ((check_car_s > _car_s) && ((check_car_s - _car_s) < 30))
       {
         _too_close = true;
-        // SHOWS HOW TO CHANGE LANES
-        ////////////////////////////////////////////////////////////////////////////////////////////////////
-        /*if (_lane > LEFT_LANE)
-        {
-          _lane = LEFT_LANE;
-        }*/
+        car_ind = i;
       }
     }
   }
 
-  // SHOWS HOW TO SLOW DOWN NOT STOP
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-  /*if (_too_close)
-  {
-    _ref_vel -= .224;
-  }
-  else if (_ref_vel < SPEED_LIMIT)
-  {
-    _ref_vel += .224;
-  }*/
   // Accelerate until we are at the speed limit if there is nothing preventing us
   if (_ref_vel < SPEED_LIMIT && !_too_close)
   {
     _ref_vel += SPEED_CHANGE;
   }
+
+  return car_ind;
 }
+
+bool Planner::is_lane_clear(int lane)
+{
+  bool lane_clear = true;
+
+  double next_to_thresh = 5;
+  double in_front_thresh = 45;
+
+  for (int i = 0; i < _sensor_fusion.size(); i++)
+  {
+    float d_check = _sensor_fusion[i][6];
+    bool in_care_lane = (d_check < (2 + 4 * lane + 2)) && (d_check > (2 + 4 * lane - 2));
+
+    if (in_care_lane)
+    {
+      double check_speed = sqrt(pow(_sensor_fusion[i][3],2) + pow(_sensor_fusion[i][4],2));
+      double check_car_s = _sensor_fusion[i][5];
+      check_car_s += ((double)(_prev_size) * 0.02 * check_speed);
+
+      bool is_in_front = (check_car_s > _car_s) && ((check_car_s - _car_s) < in_front_thresh);
+      bool is_next_to = abs(check_car_s - _car_s) < next_to_thresh;
+
+      if (is_in_front || is_next_to)
+      {
+        lane_clear = false;
+      }
+    }
+  }
+
+  return lane_clear;
+}
+
 
 int Planner::lane_prepare()
 {
-  return _lane;
+  // If none of the other lanes are clear return the current lane
+  int output = _lane;
+
+  std::vector<int> lanes_to_check;
+  // If we are not in the center lane then check to see if we can move there
+  if (_lane == LEFT_LANE)
+  {
+    lanes_to_check.push_back(CENTER_LANE);
+  }
+  // If we are not in the left or right lane then check to see if we can move to the left lane
+  else if (_lane == CENTER_LANE)
+  {
+    lanes_to_check.push_back(RIGHT_LANE);
+    lanes_to_check.push_back(LEFT_LANE);
+  }
+  //  If we are not in the left or right lane check to see if we can move to the right lane
+  else if (_lane == RIGHT_LANE)
+  {
+    lanes_to_check.push_back(CENTER_LANE);
+  }
+
+  for (size_t i = 0; i < lanes_to_check.size(); i++)
+  {
+    bool lane_clear = is_lane_clear(lanes_to_check[i]);
+    if (lane_clear)
+    {
+      output = lanes_to_check[i];
+    }
+  }
+
+  return output;
 }
 
 void Planner::lane_switch(int lane_to_switch)
-{}
+{
+  _lane = lane_to_switch;
+}
 
 void Planner::trajectory_generation()
 {
-  int prev_size = _previous_path_x.size();
-
   // Interpolated points to smooth path
   std::vector<double> ptsx;
   std::vector<double> ptsy;
@@ -102,7 +150,7 @@ void Planner::trajectory_generation()
   double ref_yaw = deg2rad(_car_yaw);
 
   // If we don't have enough points in our path then make some
-  if (prev_size < 2)
+  if (_prev_size < 2)
   {
     double prev_car_x = _car_x - cos(_car_yaw);
     double prev_car_y = _car_y - sin(_car_yaw);
@@ -115,11 +163,11 @@ void Planner::trajectory_generation()
   }
   else
   {
-    ref_x = _previous_path_x[prev_size-1];
-    ref_y = _previous_path_y[prev_size-1];
+    ref_x = _previous_path_x[_prev_size-1];
+    ref_y = _previous_path_y[_prev_size-1];
 
-    double ref_x_prev = _previous_path_x[prev_size-2];
-    double ref_y_prev = _previous_path_y[prev_size-2];
+    double ref_x_prev = _previous_path_x[_prev_size-2];
+    double ref_y_prev = _previous_path_y[_prev_size-2];
     ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
 
     ptsx.push_back(ref_x_prev);
@@ -159,7 +207,7 @@ void Planner::trajectory_generation()
   s.set_points(ptsx, ptsy);
 
   // If there are any points from the earlier iteration make sure that those also get executed
-  for (int i = 0; i < prev_size; i++)
+  for (int i = 0; i < _prev_size; i++)
   {
     _next_x_vals.push_back(_previous_path_x[i]);
     _next_y_vals.push_back(_previous_path_y[i]);
@@ -173,7 +221,7 @@ void Planner::trajectory_generation()
   double x_add_on = 0;
 
   // For all the points in our path that we still need to populate
-  for (int i = 1; i <= PATH_SIZE - prev_size; i++)
+  for (int i = 1; i <= PATH_SIZE - _prev_size; i++)
   {
     double N = target_dist / (0.02 * _ref_vel / 2.24);
     double x_point = x_add_on + target_x/N;
@@ -210,8 +258,10 @@ void Planner::plan(Sim_Input input)
   _end_path_d = input.end_path_d;
   _sensor_fusion = input.sensor_fusion;
 
+  _prev_size = _previous_path_x.size();
+
   // Keep our current lane and check if we need to leave the lane
-  lane_keep();
+  int car_ind = lane_keep();
 
   // Is there a vehicle blocking our way?
   if (_too_close)
@@ -227,8 +277,25 @@ void Planner::plan(Sim_Input input)
     // If there is no good lane to change to then just slow down
     else
     {
-      std::cout << "Reducing Speed\n";
-      _ref_vel -= SPEED_CHANGE;
+      double vx = _sensor_fusion[car_ind][3];
+      double vy = _sensor_fusion[car_ind][4];
+      double check_speed = sqrt(pow(vx,2) + pow(vy,2));
+
+      double diff = _ref_vel - check_speed;
+      _ref_vel -= diff * .009;
+      //_ref_vel -= SPEED_CHANGE;
+    }
+  }
+  // If there is no vehicle in our way and we are not in the center lane
+  else
+  {
+    if (_lane != CENTER_LANE)
+    {
+      // If the center lane is clear switch to it
+      if (is_lane_clear(CENTER_LANE))
+      {
+        lane_switch(CENTER_LANE);
+      }
     }
   }
 

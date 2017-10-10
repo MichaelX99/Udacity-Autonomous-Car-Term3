@@ -72,6 +72,8 @@ private:
 
   bool _too_close;
 
+  int _prev_size;
+
   // Inputs from the simulator at each time step
   double _car_x;
   double _car_y;
@@ -87,8 +89,9 @@ private:
 
 
   // Class functions
-  void lane_keep();
+  int lane_keep();
   int lane_prepare();
+  bool is_lane_clear(int lane);
   void lane_switch(int lane_to_switch);
   void trajectory_generation();
 
