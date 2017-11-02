@@ -42,7 +42,7 @@ change back to the project directory
 python evaluate.py
 ```
 
-##Main Project Points
+## Main Project Points
 I did not use the load_vgg function that was provided for us, instead I used the generating vgg16 tf.slim code and manually extracted the weights from the saved vgg and loaded them into my own tensors.
 
 Next I used tf.slim in order to eliminiate all the boilerplate code required for tensorflow.  
