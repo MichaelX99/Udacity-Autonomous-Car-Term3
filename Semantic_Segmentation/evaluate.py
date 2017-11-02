@@ -22,8 +22,8 @@ def segment(img, sess, input_tensor, keep_prob, segment_op):
 
 def run():
     #path = './runs/frozen.pb'
-    #path = './runs/optimized.pb'
-    path = './runs/eightbit_graph.pb'
+    path = './runs/optimized.pb'
+    #path = './runs/eightbit_graph.pb'
 
     segmentation_graph = tf.Graph()
     with segmentation_graph.as_default():
