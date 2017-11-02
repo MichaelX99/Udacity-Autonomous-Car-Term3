@@ -1,14 +1,14 @@
 # Semantic Segmentation
 ## Running my code
-'''
+```
 python main.py
-'''
+```
 Change directory to tensorflow root
 aka git clone https://github.com/tensorflow/tensorflow.git
 
-'''
+```
 bazel build tensorflow/python/tools:optimize_for_inference
- 
+
 bazel-bin/tensorflow/python/tools/optimize_for_inference \
 --input=${PATH_TO_PROJECT}/runs/frozen.pb \
 --output=${PATH_TO_PROJECT}/runs/optimized.pb \
@@ -34,13 +34,13 @@ quantize_weights
 quantize_nodes
 strip_unused_nodes
 sort_by_execution_order'
-'''
+```
 
 change back to the project directory
 
-'''
+```
 python evaluate.py
-'''
+```
 
 ##Main Project Points
 I did not use the load_vgg function that was provided for us, instead I used the generating vgg16 tf.slim code and manually extracted the weights from the saved vgg and loaded them into my own tensors.
@@ -87,6 +87,6 @@ python main.py
  - `main.py`
  - `project_tests.py`
  - Newest inference images from `runs` folder  (**all images from the most recent run**)
- 
+
  ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
