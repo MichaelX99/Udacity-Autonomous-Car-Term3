@@ -84,7 +84,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     with slim.arg_scope([slim.conv2d, slim.conv2d_transpose], num_outputs = num_classes,
                         weights_regularizer=tf.contrib.layers.l2_regularizer(1e-3),
                         weights_initializer=tf.random_normal_initializer(stddev=0.01),
-                        activation_fn=None, biases_initializer=None):
+                        activation_fn=None):
         layer7a_out = slim.conv2d(vgg_layer7_out, kernel_size=[1,1])
 
         # upsample
