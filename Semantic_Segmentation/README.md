@@ -13,7 +13,7 @@ bazel-bin/tensorflow/python/tools/optimize_for_inference \
 --input=${PATH_TO_PROJECT}/runs/frozen.pb \
 --output=${PATH_TO_PROJECT}/runs/optimized.pb \
 --frozen_graph=True \
---input_names="input_image, keep_prob" \
+--input_names="input_image,keep_prob" \
 --output_names=logits
 
 bazel build tensorflow/tools/graph_transforms:transform_graph
@@ -21,7 +21,7 @@ bazel build tensorflow/tools/graph_transforms:transform_graph
 bazel-bin/tensorflow/tools/graph_transforms/transform_graph \
 --in_graph=${PATH_TO_PROJECT}/runs/optimized.pb \
 --out_graph=${PATH_TO_PROJECT}/runs/eightbit_graph.pb \
---inputs="input_image, keep_prob" \
+--inputs="input_image,keep_prob" \
 --outputs=logits \
 --transforms='
 add_default_attributes
